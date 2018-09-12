@@ -1,10 +1,12 @@
 # GraphQL Schema Style Guide
 
-This schema style guide summarizes how we design the GraphQL schema at _Kiron Open Higher Education_. These principles are derived from our experience of running a GraphQL API for our single page web app over the last two years and and inspired by various people in the community.
+This schema style guide summarizes how we design the GraphQL schema at _Kiron Open Higher Education_. These principles are derived from our experience of running a GraphQL API over the last two years and inspired by the previous work of various people in the community.
+
+This guide starts at a very high level and then tries to be more specific in how to achieve the overarching principles in the implementation.
 
 ## Philosophy
 
-At Kiron we use GraphQL to create flexible interfaces that enable us to build better products. We want to build APIs that are intuitive to use and the consumer's user experience is our highest property.
+At Kiron we use GraphQL to create flexible interfaces that enable us to build better products. Our software design evolves around the GraphQL schema. We want to build APIs that are intuitive to use and the API consumer's user experience is our highest value.
 
 To achieve this we apply the following overarching principles:
 
@@ -12,11 +14,9 @@ To achieve this we apply the following overarching principles:
 
 While creating a flexible type model increases the type reusability and can lead to smaller type models we should instead aim for precise types. Exposed types should be tailored to the data models underneath and reduce the amounts of nullable fields. This helps the consumer of the API to know exactly what to expect. GraphQL features such as interfaces and type unions help us with that goal. Creating new types is cheap (compared to REST) and scalable. Therefore we can create stronger abstractions than our underlying SQL databases or REST resources. We are encouraged to derive from the underlying models to improve the user experience.
 
-### Strong abstractions
+### High level APIs
 
-Our API is more than just an database access provider. If the backend _can_ handle certain calculation or business logic it _should_ do so.
-
-We think that very little business logic should leak to the frontend. In GraphQL fields are only calculated/resolved if they are demanded by the frontend. This way we can create additional computed fields in our types without polluting the data model.
+Our API is more than just an database access layer. Very little business logic should be handled by to the frontend because we cannot assume that the client knows the underlying rules. If the backend _can_ handle certain calculation or business logic it _should_ do so. In GraphQL fields are only calculated/resolved if they are demanded by the frontend. This allows us to create additional computed fields in our types without polluting the data model.
 
 _Example_: A course is full when the number of participants reached the maximum amount of participants
 
@@ -27,41 +27,45 @@ type Course {
   maxParticipants: Int!
 
   # good
-  isFull: Boolean!
+  full: Boolean!
 }
 ```
 
 ### Leveraging the type system
 
-GraphQL makes use of a strict type system in the Schema Definition Languages (SDL) as well as in the query languages (GraphQL). We want to make use of this property instead of creating documentation, style guides or naming conventions.
+GraphQL makes use of a strict type system in the Schema Definition Languages (SDL) as well as in the query languages (GraphQL). In GraphQL every property or argument not only carries a name but also a type and a description, we can specify our API without creating external documentation, guides or naming conventions.
 
 ### Strict conventions
 
-The API should be consistent in the way it is designed and shaped. This style guide will cover most rules to make the API consistent. Sometimes we have to go even further to deliver consistency on a higher level. The team is responsible to make decisions on when to favour consistency over other guidelines.
+The API should be consistent in the way it is designed and shaped. This style guide will cover many rules to make the API consistent. Sometimes we have to go even further to deliver consistency on a higher level. Consistency might often be a tradeoff for another principle and the team is responsible to make decisions on when to favour consistency over other principles.
 
 ## Design best practices
 
-### Object types
+### Unique id fields
 
-#### Unique id field
+Every output object type that represents an entity should have a single identifier field that uniquely identifies the resource within the type. The identifier field is named `id` and of type `ID!`. The identifier field is owned by the API and while its value should not change over time, the possibility of change should be assumed. The `ID` scalar is serialised as string in GraphQL responses and has to be handled as as such in the frontend code.
 
-Every output object type that represents an entity should have a single identifier field that uniquely identifies the resource within the type. The identifier field is named `id` and of type `ID!`. The identifier field is owned by the API and while its value should not change for the same resource, the possibility of change should be assumed. The `ID` scalar is serialised as string in GraphQL responses and has to be handled as as such in the frontend code.
+### Non nullable by default
 
-### Nullable types
+Generally types should only be nullable if this is a necessity of the domain (1 to 0..1 relationships). In contrast many companies prefer to make as little guarantees as possible ([the hidden cost of non-nullable fields](https://medium.com/@calebmer/when-to-use-graphql-non-null-fields-4059337f6fc8)). In our (fairly small) API we have found that the only places where non-null guarantees are hard to make are 1 to 1 relationships.
 
-#### Non nullable by default
+### List are not nullable
 
-Generally types should only be nullable if this is strictly necessary. Unnecessarily nullable types create extra null checks in the frontend code and therefore should be avoided.
+List usually are not nullable. Instead a missing value is represented by the empty list. Lists should not contain null values since they carry no meaning on the type level.
 
-#### Lists and nullable types
+_Example:_
 
-List usually are not nullable. Instead an empty array should represent an empty list. Lists should not contain null values. Instead null values should be filtered out at the API level unless explicitly necessary.
+```graphql
+type Person {
+  fiends: [Person]!
+}
+```
 
-#### Nullable strings
-
-Strings usually are not nullable. Instead the empty string should represent missing information where possible. In some rare cases null should represent the absence of a value while the empty string represents a valid present value.
+If the `friends` field returns `[null]` the meaning of the `null` value is not obvious. One possible interpretation is that the friend represented by the null value is not known to the user. This is implicit knowledge that does not directly follow from the type system. There are many more explicit solutions like the introduction of a `PersonFriendConnection` type that contains the `viewerShownFriends` and the `viewerHiddenFriends`.
 
 ## Naming
+
+While most types can be freely named, there are some rules on casing and
 
 ### Types
 
@@ -220,14 +224,18 @@ type Query {
 
 ### Viewer queries
 
-Viewer queries are similar to the collection and by id queries but already have a filter parameter applied: The user id / account id of the viewer. Viewer queries are prefixed with `my` (or `me` for the user or account object query).
+Viewer queries are similar to the collection and by id queries but already have a filter parameter applied: The user id / account id of the viewer. Viewer queries are located inside of the `viewer` namespace.
 
-_Example_: The `me` query returns the current user object. The `myCourses` query returns all courses that belong to the current viewer.
+_Example_: The `courses` root query returns all courses. The `viewer.courses` field returns all courses that belong to the current viewer.
 
 ```graphql
 type Query {
-  me: Account!
-  myCourses: [Course!]!
+  viewer: Viewer!
+  courses: [Course!]!
+}
+
+type Viewer {
+  courses: [Course!]!
 }
 ```
 
@@ -241,7 +249,7 @@ We design three types of mutations to cover all use cases. The types follow stro
 
 Create mutations are mutations that create a new entity in the database. The mutation is named after the type of entity it is creating. The mutations must be named in the following schema `create<Entity Name>`. When you want to create a new `User` the mutation to use is the `createUser` mutation.
 
-Create mutations usually take a single required argument `draft` of the draft type of the entity `<Entity Name>Draft`. The draft contains all the arguments that are used to create the instance. This allows us to make all arguments mandatory that are essential for the type and other fields nullable, that contain optional data for the creation.
+Create mutations usually take a single required argument `draft` of the draft type of the entity `<Entity Name>Draft`. The draft contains all the arguments that are used to create the instance. This allows us to make all arguments mandatory that are essential for the type and other fields nullable, that contain optional data for the creation. Mutations can have some implicit parameters for example the viewer or the current date.
 
 Examples:
 
@@ -254,13 +262,47 @@ type Mutation {
   # bad
   newUser(user: UserInput!): NewUserResult!
 }
+
+input CertificateDraft {
+  title: String!
+  score: Float
+}
+
+# Certificate draft would be enough to create Certificate type with fields
+type Certificate {
+  id: ID!
+  title: String!
+  score: Float
+  createdAt: Date!
+  updatedAt: Date!
+}
 ```
 
 ## Mutation results
 
-Mutation results should contain the name of the mutation and should be postfixed with `Result`.
+Mutation results should contain the name of the mutation and should be postfixed with `Result`. The mutation result is always non-nullable.
 
 | Examples    |                                    |
 | :---------- | :--------------------------------- |
 | Good        | `updateUser` -> `UpdateUserResult` |
 | Not allowed | `updateUser` -> `UserUpdate`       |
+
+Mutation results have two standard fields that need to be present in every result object type:
+
+The `success` field indicates the status of the request and is either `true` if the mutation succeeded or `false` if it failed. The `errors` field contains a list of user errors that occurred during the execution of the mutation. This allows us to differentiate between the errors that happen due to bugs or problems in the implementation and user errors like failed validations. While it is hard to draw a clear line the rule is that if the error might address the enduser it should be inside of the error field.
+
+Mutation results should also always contain the updated or newly created entity usually in a field that is named after the type name.
+
+_Example:_
+
+```graphql
+type Mutation {
+  createUser(draft: UserDraft): CreateUserResult!
+}
+
+type CreateUserResult {
+  success: Boolean!
+  errors: [Error!]!
+  user: User
+}
+```
