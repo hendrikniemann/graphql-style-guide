@@ -1,0 +1,26 @@
+{
+  "name": "graphql-styleguide",
+  "version": "0.1.0",
+  "description": "A styleguide for GraphQL APIs at Kiron Open Higher Education",
+  "main": "index.js",
+  "scripts": {
+    "build": "markdown-toc README.md -i"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kiron/graphql-style-guide.git"
+  },
+  "keywords": [
+    "graphql",
+    "styleguide"
+  ],
+  "author": "hendrikniemann",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/kiron/graphql-style-guide/issues"
+  },
+  "homepage": "https://github.com/kiron/graphql-style-guide#readme",
+  "dependencies": {
+    "markdown-toc": "^1.2.0"
+  }
+}

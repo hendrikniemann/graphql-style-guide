@@ -4,6 +4,44 @@ This schema style guide summarizes how we design the GraphQL schema at _Kiron Op
 
 This guide starts at a very high level and then tries to be more specific in how to achieve the overarching principles in the implementation.
 
+## Table of contents
+
+<!-- toc -->
+
+- [Philosophy](#philosophy)
+  * [Precise types](#precise-types)
+  * [High level APIs](#high-level-apis)
+  * [Leveraging the type system](#leveraging-the-type-system)
+  * [Strict conventions](#strict-conventions)
+- [Design best practices](#design-best-practices)
+  * [Unique id fields](#unique-id-fields)
+  * [Non nullable by default](#non-nullable-by-default)
+  * [List are not nullable](#list-are-not-nullable)
+- [Naming](#naming)
+  * [Types](#types)
+    + [Casing](#casing)
+    + [Singular / Plural](#singular--plural)
+    + [Output types](#output-types)
+    + [Input types](#input-types)
+  * [Fields](#fields)
+    + [Casing](#casing-1)
+    + [Singular / Plural](#singular--plural-1)
+    + [Naming](#naming-1)
+  * [Arguments](#arguments)
+    + [Casing](#casing-2)
+  * [Mutations](#mutations)
+    + [Naming](#naming-2)
+  * [Queries](#queries)
+  * [Naming](#naming-3)
+    + [Collection queries](#collection-queries)
+    + [By id queries](#by-id-queries)
+  * [Viewer queries](#viewer-queries)
+- [Mutations](#mutations-1)
+  * [Create Mutations](#create-mutations)
+- [Mutation results](#mutation-results)
+
+<!-- tocstop -->
+
 ## Philosophy
 
 At Kiron we use GraphQL to create flexible interfaces that enable us to build better products. Our software design evolves around the GraphQL schema. We want to build APIs that are intuitive to use and the API consumer's user experience is our highest value.
