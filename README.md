@@ -346,7 +346,27 @@ type Mutation {
 
 type CreateUserResult {
   success: Boolean!
-  errors: [Error!]!
+  errors: [UserError!]!
   user: User
+}
+```
+
+Alternatively, mutation results can modelled as union types. In this case the result can either be a success or a failure. The benefit is that the type can be more precise in the sense that if the mutation is successful no null check on the updated entity (in the example `user`) is needed.
+
+_Example:_
+
+```graphql
+type Mutation {
+  createUser(draft: UserDraft): CreateUserResult!
+}
+
+union CreateUserResult = CreateUserSuccess | CreateMutationFailure
+
+type CreateUserSuccess {
+  user: User!
+}
+
+type CreateMutationFailure {
+  errors: [UserError!]!
 }
 ```
