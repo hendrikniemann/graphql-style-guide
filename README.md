@@ -9,8 +9,8 @@ This guide starts at a very high level and then tries to be more specific in how
 <!-- toc -->
 
 - [Philosophy](#philosophy)
-  * [Precise types](#precise-types)
   * [High level APIs](#high-level-apis)
+  * [Precise types](#precise-types)
   * [Leveraging the type system](#leveraging-the-type-system)
   * [Strict conventions](#strict-conventions)
 - [Design best practices](#design-best-practices)
@@ -38,6 +38,7 @@ This guide starts at a very high level and then tries to be more specific in how
 - [Mutations](#mutations-1)
   * [Create Mutations](#create-mutations)
   * [Delete Mutations](#delete-mutations)
+  * [Update Mutations](#update-mutations)
   * [Mutation results](#mutation-results)
 
 <!-- tocstop -->
@@ -48,13 +49,13 @@ At Kiron we use GraphQL to create flexible interfaces that enable us to build be
 
 To achieve this we apply the following overarching principles:
 
-### Precise types
-
-While creating a flexible type model increases the type reusability and can lead to smaller type models we should instead aim for precise types. Exposed types should be tailored to the data models underneath and reduce the amounts of nullable fields. This helps the consumer of the API to know exactly what to expect. GraphQL features such as interfaces and type unions help us with that goal. Creating new types is cheap (compared to REST) and scalable. Therefore we can create stronger abstractions than our underlying SQL databases or REST resources. We are encouraged to derive from the underlying models to improve the user experience.
-
 ### High level APIs
 
-Our API is more than just an database access layer. Very little business logic should be handled by to the frontend because we cannot assume that the client knows the underlying rules. If the backend _can_ handle certain calculation or business logic it _should_ do so. In GraphQL fields are only calculated/resolved if they are demanded by the frontend. This allows us to create additional computed fields in our types without polluting the data model.
+Our API is more than just an database access layer. Instead it evolves around specific needs and use cases of our product. [The GraphQL specification](http://spec.graphql.org/June2018/#sec-Overview) uses the following formulation.
+
+> **Product‐centric:** GraphQL is unapologetically driven by the requirements of views and the front‐end engineers that write them. GraphQL starts with their way of thinking and requirements and builds the language and runtime necessary to enable that.
+
+Very little business logic should be handled by to the frontend because we cannot assume that the client knows the underlying rules. If the backend _can_ handle certain calculation or business logic it _should_ do so. In GraphQL fields are only calculated/resolved if they are demanded by the frontend. This allows us to create additional computed fields in our types without polluting the data model.
 
 _Example_: A course is full when the number of participants reached the maximum amount of participants
 
@@ -69,9 +70,39 @@ type Course {
 }
 ```
 
+### Precise types
+
+While creating a flexible type model increases the type reusability and can lead to smaller type models we should instead aim for precise types. Exposed types should not only be tailored to the data models underneath but also to the requirements of the views accessing using the parts if the API. Precise types can reduce the amount of nullable fields. This helps the consumer of the API to know exactly what to expect. GraphQL features such as interfaces and type unions help us with that goal. Creating new types is cheap (compared to REST) and scalable. Therefore we can create stronger abstractions than our underlying SQL databases or REST resources. We are encouraged to derive from the underlying models to improve the user experience.
+
+_Example_: A user can see certain data on themselves but not on other users. The frontend displays different components depending on whether the returned object is the user object of the viewer or a different user.
+
+```graphql
+# bad
+type User {
+  name: String!
+  birthDay: Date
+  friends: UserConnection
+}
+
+# good
+interface User {
+  name: String!
+}
+
+type UserSelf implements User {
+  name: String!
+  birthDay: Date!
+  friends: UserConnection
+}
+
+type UserOther implements User {
+  name: String!
+}
+```
+
 ### Leveraging the type system
 
-GraphQL makes use of a strict type system in the Schema Definition Languages (SDL) as well as in the query languages (GraphQL). In GraphQL every property or argument not only carries a name but also a type and a description, we can specify our API without creating external documentation, guides or naming conventions.
+GraphQL makes use of a strict type system in the Schema Definition Languages (SDL) as well as in the query languages (GraphQL). In GraphQL every property or argument not only carries a name but also a type and a description. We can specify our API without creating external documentation, guides or naming conventions.
 
 ### Strict conventions
 
@@ -81,7 +112,9 @@ The API should be consistent in the way it is designed and shaped. This style gu
 
 ### Unique id fields
 
-Every output object type that represents an entity should have a single identifier field that uniquely identifies the resource within the type. The identifier field is named `id` and of type `ID!`. The identifier field is owned by the API and while its value should not change over time, the possibility of change should be assumed. The `ID` scalar is serialised as string in GraphQL responses and has to be handled as as such in the frontend code.
+Every output object type that represents an entity should have a single identifier field that uniquely identifies the resource within the type. The identifier field is named `id` and of type `ID!`. The identifier field is owned by the API and while its value should not change over time, the possibility of change should be assumed\*. The `ID` scalar is serialised as string in GraphQL responses and has to be handled as as such in the frontend code.
+
+_\* Mostly meaning, no hard coding of IDs in application code._
 
 ### Non nullable by default
 
@@ -127,8 +160,8 @@ Output types should be named according to the style rules and their name in the 
 
 Types should not have their kind name (e.g. enum type or scalar type) in their name. If a type is an object type, enum type or scalar is already defined by the type system and does not have to be repeated in the name itself.
 
-| Examples    |                                                   |
-| :---------- | :------------------------------------------------ |
+| Examples    |                                                    |
+| :---------- | :------------------------------------------------- |
 | Good        | `Gender`, `CourseStatus`, `Date`                   |
 | Not allowed | `GenderEnumType`, `CourseStatusEnum`, `DateScalar` |
 
@@ -149,8 +182,8 @@ _TODO_
 
 Field names should be in camel case. That means they start with a capital letter. Field names should not contain whitespace, dashes or underscores.
 
-| Examples    |                                                         |
-| :---------- | :------------------------------------------------------ |
+| Examples    |                                                   |
+| :---------- | :------------------------------------------------ |
 | Good        | `user`, `socialSecurityNumber`, `updateProfile`   |
 | Not allowed | `User`, `social_security_number`, `updateprofile` |
 
@@ -165,16 +198,26 @@ Fields that return single (non list type) values should be singular, fields that
 
 ### Naming
 
-Fields should be as short as possible and should neither contain the type name of the object type they are defined on nor their output type (sometimes there is a grey zone when the type name is part of the name, e.g. `dateOfBirth`).
+Field names should be consistent with the underlying data model. Often we use our GraphQL API to hide away business logic implementation details and the names might derive.
 
-| Examples    |                            |
-| :---------- | :------------------------- |
-| Good        | `name`, `birthday`         |
-| Not allowed | `fileName`, `birthdayDate` |
+Fields should be as short as possible and should neither contain the type name of the object type they are defined on nor their output type. Sometimes there is a grey zone when the type name is part of the name, e.g. `dateOfBirth`, `username` or `googleCalendarId`.
 
-_Debatable and currently not done at all in our API. In GraphQL you can see the type of a variable easily in the schema. This goes a bit against the other rules outlined above..._
+_Example:_
 
-~Boolean fields should be prefixed with `is` or `has` (or similar) to create a more speakable field name. This is generally a good practice in most programming languages or database designs and should therefore be aligning well with the other parts of the codebase.~
+```graphql
+type File {
+  # good
+  name: String!
+
+  # bad, from the context it is already clear that this is a name of a file
+  fileName: String!
+}
+
+type User {
+  # bad, the type and the name already indicate that this value is a date
+  birthdayDate: Date!
+}
+```
 
 ---
 
@@ -321,6 +364,10 @@ type Certificate {
 ### Delete Mutations
 
 Delete mutations are used to delete a single entity from the database. The mutation is named after the type of entity it is deleting. The mutations must be named in the following schema `delete<Entity Name>`. When a mutation deletes a `User` the mutation is named `deleteUser`.
+
+### Update Mutations
+
+Update mutations are mutations that change an existing entity. This change does not neccessarily map only to updates on the database layer (these could also be create or deletes, e.g. when connecting entities via joining tables).
 
 ### Mutation results
 
